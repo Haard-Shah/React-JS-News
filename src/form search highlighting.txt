@@ -1,0 +1,149 @@
+import React, { useState, useEffect } from "react";
+import "./styles.css";
+
+const API_KEY = "45183ae6b38a4d3cbd22f7aded622b6f";
+
+function getHeadlinesFromApi(search) {
+  const url =
+    `https://newsapi.org/v2/top-headlines?country=au&apiKey=${API_KEY}` +
+    (search ? `&q=${search}` : "");
+
+  return fetch(url)
+    .then(res => res.json())
+    .then(res => {
+      console.log(res);
+      return res.articles;
+    });
+}
+
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+function useHeadlines(search) {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [headlines, setHeadlines] = useState([]);
+  const debouncedSearch = useDebounce(search, 300);
+
+  useEffect(
+    // The 'effect'
+    () => {
+      setLoading(true);
+      getHeadlinesFromApi(debouncedSearch)
+        .then(headlines => {
+          setHeadlines(headlines);
+          setLoading(false);
+        })
+        .catch(e => {
+          setError(e);
+          setLoading(false);
+        });
+    },
+    // The dependencies
+    [debouncedSearch]
+  );
+
+  return {
+    headlines,
+    loading,
+    error
+  };
+}
+
+function SearchBar(props) {
+  const [innerSearch, setInnerSearch] = useState("");
+
+  return (
+    <div>
+      <input
+        aria-labelledby="search-button"
+        type="text"
+        name="search"
+        id="search"
+        value={innerSearch}
+        onChange={e => {
+          setInnerSearch(e.target.value);
+          props.onSearch(e.target.value);
+        }}
+      />
+      <button onClick={e => props.onSearch(innerSearch)}>Search</button>
+      <button
+        onClick={e => {
+          setInnerSearch("");
+          props.onSearch("");
+        }}
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// Javascript + HTML(really JSX)
+
+function Headline({ title, url, searchTerm }) {
+  if (!searchTerm) {
+    return (
+      <a href={url}>
+        <h1>{title}</h1>
+      </a>
+    );
+  }
+
+  const chunkedTitle = title.split(new RegExp(`(${searchTerm})`, "ig"));
+
+  return (
+    <a href={url}>
+      <h1>
+        {chunkedTitle.map((chunk, i) =>
+          chunk.toLowerCase() === searchTerm.toLowerCase() ? (
+            <span style={{ backgroundColor: "yellow" }} key={i}>
+              {chunk}
+            </span>
+          ) : (
+            <span key={i}>{chunk}</span>
+          )
+        )}
+      </h1>
+    </a>
+  );
+}
+
+export default function App() {
+  const [search, setSearch] = useState("");
+  const { headlines, loading, error } = useHeadlines(search);
+
+  if (error) {
+    return <h1>Error loading from API</h1>;
+  }
+
+  return (
+    <div className="App">
+      <h1>CAB230 News</h1>
+      <SearchBar onSearch={value => setSearch(value)} />
+      {!loading ? (
+        headlines.length > 0 ? (
+          headlines.map(headline => (
+            <Headline {...headline} key={headline.title} searchTerm={search} />
+          ))
+        ) : (
+          <h1>No results</h1>
+        )
+      ) : (
+        <h1>Loading...</h1>
+      )}
+    </div>
+  );
+}
